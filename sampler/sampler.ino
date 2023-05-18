@@ -37,6 +37,10 @@ SegmentDisplay segmentDisplay(31, 28, 33, 9, 32, 30, 26, 29);
 #define SDCARD_MOSI_PIN  11
 #define SDCARD_SCK_PIN   13
 
+int maxSdReadAttempts = 10;
+int numSdReadAttempts = 0;
+File root;
+
 // select the input pins for the potentiometers
 int potPin1 = A0; 
 int potPin2 = A1;
@@ -72,27 +76,45 @@ char displayValue = 0;
 
 int mywaveform = 0;
 
-void setup() {
+void setup() {  
+  // open the serial port at 9600 bps:
+  Serial.begin(9600); 
 
-//Audio setup
+  Serial.println("Booting Sampler");
+  
+  //Audio setup
+  Serial.println("Setting up audio...");
   AudioMemory(8);
   sgtl5000_1.enable();
   sgtl5000_1.volume(1);
   sgtl5000_1.inputSelect(AUDIO_INPUT_LINEIN);
   sgtl5000_1.micGain(36); //NEEDED?
+  
+  Serial.println("Audio ready");
+
+  // SD setup
+  Serial.println("Setting up SD card...");
   SPI.setMOSI(SDCARD_MOSI_PIN);
   SPI.setSCK(SDCARD_SCK_PIN);
   if (!(SD.begin(SDCARD_CS_PIN))) {
-    while (1) {
+    while (numSdReadAttempts < maxSdReadAttempts) {
       Serial.println("Unable to access the SD card");
+      numSdReadAttempts++;
       delay(500);
     }
+    Serial.println("ERROR: Failed to read SD card.");
+  } else {
+    Serial.println("Reading root...");
+    root = SD.open("/");
+    printDirectory( root, 0 );
+    root.close();
+    Serial.println("done");
   }
-
-  // open the serial port at 9600 bps:
-  Serial.begin(9600); 
   
+  numSdReadAttempts = 0;
+
   // sets the digital pins as inputs and set pullups
+  Serial.println("Setting digital pins...");
   pinMode(btnPin1, INPUT_PULLUP);   
   pinMode(btnPin2, INPUT_PULLUP); 
   pinMode(btnPin3, INPUT_PULLUP); 
@@ -100,9 +122,10 @@ void setup() {
   pinMode(gatePin1, INPUT_PULLUP); 
   pinMode(gatePin2, INPUT_PULLUP); 
   pinMode(encBtnPin, INPUT_PULLUP); 
+  Serial.println("done");
 
-
-//Set Display LEDs ports as Outputs 
+  //Set Display LEDs ports as Outputs 
+  Serial.println("Setting display...");
   pinMode(30, OUTPUT);    
   pinMode(32, OUTPUT); 
   pinMode(33, OUTPUT); 
@@ -110,9 +133,9 @@ void setup() {
   pinMode(31, OUTPUT); 
   pinMode(26, OUTPUT); 
   pinMode(29, OUTPUT); 
-  pinMode(9, OUTPUT); 
-
-  Serial.println("Sampler ready");
+  pinMode(9, OUTPUT);
+  Serial.println("done");
+  
 }
 
 
@@ -121,19 +144,47 @@ void loop() {
   pot2 = analogRead(potPin2);
   pot3 = max(analogRead(potPin3), 1);
   pot4 = analogRead(potPin4);
+  btn1 = !digitalRead(btnPin1);
+  btn2 = !digitalRead(btnPin2);
+  btn3 = !digitalRead(btnPin3);
+  btn4 = !digitalRead(btnPin4);
   encPressed = !digitalRead(encBtnPin);
   newEncPos = enc.read() / 4;
 
-  if( encPressed ) { 
+  if (encPressed) { 
     encFlag = !encFlag;
     segmentDisplay.displayHex(displayValue, encFlag);
   }
   
-  if( newEncPos != oldEncPos ) {
+  if (newEncPos != oldEncPos) {
     displayValue = abs(newEncPos % 16);
     oldEncPos = newEncPos;
     segmentDisplay.displayHex(displayValue, encFlag);
   }
-  
-  Serial.println(encPressed);
+
+//  Serial.println(btn4);
+}
+
+void printDirectory(File dir, int numTabs) {
+  while( true ) {
+    File entry = dir.openNextFile();
+    
+    if (!entry) { break; }
+
+    for(uint8_t i = 0; i < numTabs; i++) {
+      Serial.print('\t');
+    }
+    
+    Serial.print(entry.name());
+    
+    if (entry.isDirectory()) {
+      Serial.println("/");
+      printDirectory(entry, numTabs + 1);
+    } else {
+      Serial.print("\t\t");
+      Serial.println(entry.size(), DEC);
+    }
+    
+    entry.close();
+  }
 }
