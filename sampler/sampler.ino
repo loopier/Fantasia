@@ -16,10 +16,10 @@
 AudioControlSGTL5000     sgtl5000_1;     //xy=1125,313
 
 // GUItool: begin automatically generated code
-AudioSynthWavetable      wavetable1;     //xy=823,575
-AudioOutputI2S           i2s1;           //xy=1294,566
-AudioConnection          patchCord1(wavetable1, 0, i2s1, 0);
-AudioConnection          patchCord2(wavetable1, 0, i2s1, 1);
+AudioPlaySdWav           playSdWav1;     //xy=217,501
+AudioOutputI2S           i2s1;           //xy=435,502
+AudioConnection          patchCord1(playSdWav1, 0, i2s1, 0);
+AudioConnection          patchCord2(playSdWav1, 1, i2s1, 1);
 // GUItool: end automatically generated code
 
 
@@ -40,6 +40,7 @@ SegmentDisplay segmentDisplay(31, 28, 33, 9, 32, 30, 26, 29);
 int maxSdReadAttempts = 10;
 int numSdReadAttempts = 0;
 File root;
+File wavFile;
 
 // select the input pins for the potentiometers
 int potPin1 = A0; 
@@ -103,14 +104,16 @@ void setup() {
       delay(500);
     }
     Serial.println("ERROR: Failed to read SD card.");
-  } else {
+  } {
     Serial.println("Reading root...");
     root = SD.open("/");
     printDirectory( root, 0 );
     root.close();
+    Serial.println("Opening sound file");
+    // wavFile = SD.open("SDTEST1.WAV");
+    playSdWav1.play("SDTEST1.WAV");
     Serial.println("done");
   }
-  
   numSdReadAttempts = 0;
 
   // sets the digital pins as inputs and set pullups
@@ -162,6 +165,7 @@ void loop() {
     segmentDisplay.displayHex(displayValue, encFlag);
   }
 
+  Serial.println(playSdWav1.positionMillis());
 //  Serial.println(btn4);
 }
 
