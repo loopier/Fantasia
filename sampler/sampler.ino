@@ -7,6 +7,10 @@
 #include <SD.h>
 #include <SerialFlash.h>
 #include <Encoder.h>
+#define MAX_NUM_SOUND_BANKS 2
+#define MAX_NUM_SOUND_FILES 16
+#define BUTTON_UP 0
+#define BUTTON_DOWN 1
 
 // Audio Declarations
 // AudioSynthWaveform       waveform1;      //xy=684,318
@@ -16,10 +20,10 @@
 AudioControlSGTL5000     sgtl5000_1;     //xy=1125,313
 
 // GUItool: begin automatically generated code
-AudioPlaySdWav           playSdWav1;     //xy=217,501
+AudioPlaySdWav           wavPlayer;     //xy=217,501
 AudioOutputI2S           i2s1;           //xy=435,502
-AudioConnection          patchCord1(playSdWav1, 0, i2s1, 0);
-AudioConnection          patchCord2(playSdWav1, 1, i2s1, 1);
+AudioConnection          patchCord1(wavPlayer, 0, i2s1, 0);
+AudioConnection          patchCord2(wavPlayer, 1, i2s1, 1);
 // GUItool: end automatically generated code
 
 
@@ -40,17 +44,25 @@ SegmentDisplay segmentDisplay(31, 28, 33, 9, 32, 30, 26, 29);
 int maxSdReadAttempts = 10;
 int numSdReadAttempts = 0;
 File root;
-File wavFile;
+enum SoundBank{
+SOUND_BANK_A,
+SOUND_BANK_B,
+};
+String sounds[MAX_NUM_SOUND_BANKS][MAX_NUM_SOUND_FILES];
+SoundBank soundBank = SOUND_BANK_A;
+int soundFile = 0; // display value
+String soundFilename;
+
 
 // select the input pins for the potentiometers
-int potPin1 = A0; 
+int potPin1 = A0;
 int potPin2 = A1;
 int potPin3 = A2;
 int potPin4 = A3;
 Encoder enc(0,1);
 
 // pushbutton connected to digital pinS
-int btnPin1 = 2;    
+int btnPin1 = 2;
 int btnPin2 = 5; 
 int btnPin3 = 25; 
 int btnPin4 = 27; 
@@ -63,12 +75,15 @@ float pot1 = 0;
 float pot2 = 0;
 float pot3 = 0;
 float pot4 = 0;
-int btn1 = 0;   
-int btn2 = 0;
-int btn3 = 0;
-int btn4 = 0;
+
+int btn1 = BUTTON_UP;
+int btn2 = BUTTON_UP;
+int btn3 = BUTTON_UP;
+int btn4 = BUTTON_UP;
+
 int gate1 = 0;
 int gate2 = 0;
+
 long oldEncPos = -999;
 long newEncPos = -999;
 bool encFlag = 0; // is display decimal flag displayed
@@ -105,15 +120,12 @@ void setup() {
     }
     Serial.println("ERROR: Failed to read SD card.");
   } {
-    Serial.println("Reading root...");
-    root = SD.open("/");
-    printDirectory( root, 0 );
-    root.close();
-    Serial.println("Opening sound file");
-    // wavFile = SD.open("SDTEST1.WAV");
-    playSdWav1.play("SDTEST1.WAV");
-    Serial.println("done");
+    loadSoundFiles();
+    wavPlayer.play("SDTEST1.WAV");
+    Serial.println("Playing sound file...");
   }
+
+  // reset for potential future attempts
   numSdReadAttempts = 0;
 
   // sets the digital pins as inputs and set pullups
@@ -127,7 +139,7 @@ void setup() {
   pinMode(encBtnPin, INPUT_PULLUP); 
   Serial.println("done");
 
-  //Set Display LEDs ports as Outputs 
+  // set Display LEDs ports as Outputs
   Serial.println("Setting display...");
   pinMode(30, OUTPUT);    
   pinMode(32, OUTPUT); 
@@ -138,7 +150,8 @@ void setup() {
   pinMode(29, OUTPUT); 
   pinMode(9, OUTPUT);
   Serial.println("done");
-  
+
+  Serial.print("SOUND_BANK:"); Serial.println(soundBank);
 }
 
 
@@ -156,17 +169,44 @@ void loop() {
 
   if (encPressed) { 
     encFlag = !encFlag;
+    soundBank = int(encFlag);
+    // soundFile = displayValue;
+
     segmentDisplay.displayHex(displayValue, encFlag);
+    soundFilename = sounds[soundBank][soundFile];
+    // wavPlayer.play(soundFilename);
+    Serial.println(soundFilename);
   }
   
   if (newEncPos != oldEncPos) {
-    displayValue = abs(newEncPos % 16);
+    int hex = abs(newEncPos) % 16;
+    if(newEncPos >= 0) {
+      displayValue = hex;
+    } else {
+      displayValue = 16 - hex;
+    }
+    Serial.println(hex);
+
     oldEncPos = newEncPos;
+
     segmentDisplay.displayHex(displayValue, encFlag);
+    soundFile = hex;
+    soundFilename = sounds[soundBank][soundFile];
+    // changeSoundFile(soundFilename):
+    Serial.print(soundBank);
+    Serial.print(":");
+    Serial.print(soundFile);
+    Serial.print(" - ");
+    Serial.print(displayValue);
+    Serial.println(soundFilename);
   }
 
-  Serial.println(playSdWav1.positionMillis());
-//  Serial.println(btn4);
+  if (btn1 == BUTTON_DOWN) {
+    Serial.println("btn 1 DOWN");
+  }
+
+  // Serial.println(wavPlayer.positionMillis());
+  // Serial.println(btn1);
 }
 
 void printDirectory(File dir, int numTabs) {
@@ -191,4 +231,33 @@ void printDirectory(File dir, int numTabs) {
     
     entry.close();
   }
+}
+
+void loadSoundFiles() {
+    Serial.println("Loading sound files...");
+    Serial.println("Reading root...");
+    root = SD.open("/");
+    // printDirectory( root, 0 );
+
+    int soundIndex = 0;
+
+    while(true) {
+      File entry = root.openNextFile();
+      if(!entry) { break; }
+      sounds[soundBank][soundIndex] = entry.name();
+      Serial.print(entry.name());
+      Serial.print(" : ");
+      Serial.println(sounds[soundBank][soundIndex]);
+      soundIndex++;
+      entry.close();
+    }
+    root.close();
+    Serial.println("Loading sound files done.");
+}
+
+void changeSoundFile( String filename ) {
+  // wavPlayer.stop();
+  // String f = filename;
+  // wavPlayer.play(f);
+
 }
